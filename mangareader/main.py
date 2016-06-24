@@ -4,7 +4,7 @@ from time import time
 
 import gi, glib
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GdkPixbuf, GLib
+from gi.repository import Gtk, GdkPixbuf, GLib, Gdk
 
 from PIL import Image
 from PIL.Image import ANTIALIAS
@@ -43,16 +43,6 @@ class Panel(Gtk.Image):
         _file = self.Parent.archive_manager.last_page()
         if _file:
             self.set_image(_file)
-
-    def next(self,event):
-        if self.Parent.current_archive:
-            _file = self.Parent.archive_manager.next()
-            self.display_page(_file)
-
-    def previous(self,event):
-        if self.Parent.current_archive:
-            _file = self.Parent.archive_manager.previous()
-            self.display_page(_file,next_file=False)
 
     def display_page(self,_file,next_file=True):
         if _file:
@@ -121,6 +111,11 @@ class Application_window(Gtk.Window):
         # self.SetBackgroundColour('BLACK')
 
         self.box = Gtk.Box()
+        self.box.override_background_color(
+            Gtk.StateType.NORMAL, 
+            Gdk.RGBA(0,0,0,1)
+        )
+
         self.box.set_spacing (5)
         self.box.set_orientation(Gtk.Orientation.VERTICAL)
 
@@ -133,7 +128,36 @@ class Application_window(Gtk.Window):
         self.InitUI()
 
         self.box.pack_start (self.panel, False, False, 0)
+
+        self.current_archive = None
+
+        allocation = self.get_allocation()
+        self.past_width,self.past_height = allocation.width,allocation.height
+
+        self.connect("check-resize",self.check_resize)
+        self.connect("key_press_event",self.manage_key_events)
     
+    def manage_key_events(self,widget,event):
+        if not self.current_archive:
+            return
+
+        if event.keyval not in [Gdk.KEY_Left,Gdk.KEY_Right]:
+            return
+
+        if(event.keyval == Gdk.KEY_Left):
+            self.previous()
+        elif (event.keyval == Gdk.KEY_Right):
+            self.next()
+            
+
+    def previous(self,event):
+        _file = self.archive_manager.previous()
+        self.panel.display_page(_file)
+
+    def next(self,event):
+        _file = self.archive_manager.next()
+        self.panel.display_page(_file)
+
     def check_resize(self,a):
         allocation = self.get_allocation()
         width,height = allocation.width,allocation.height
@@ -151,9 +175,9 @@ class Application_window(Gtk.Window):
         tool_first = Gtk.ToolButton(stock_id=Gtk.STOCK_GOTO_FIRST)
         tool_first.connect_after('clicked',self.previous_archive)
         tool_previous = Gtk.ToolButton(stock_id=Gtk.STOCK_GO_BACK)
-        tool_previous.connect_after('clicked',self.panel.previous)
+        tool_previous.connect_after('clicked',self.previous)
         tool_next = Gtk.ToolButton(stock_id=Gtk.STOCK_GO_FORWARD)
-        tool_next.connect_after('clicked',self.panel.next)
+        tool_next.connect_after('clicked',self.next)
         tool_last = Gtk.ToolButton(stock_id=Gtk.STOCK_GOTO_LAST)
         tool_last.connect_after('clicked',self.next_archive)
 
@@ -162,28 +186,6 @@ class Application_window(Gtk.Window):
         toolbar.add(tool_previous)
         toolbar.add(tool_next)
         toolbar.add(tool_last)
-
-
-
-        # self.Bind(wx.EVT_TOOL, self.on_open, tool_open)
-        # self.Bind(wx.EVT_TOOL, self.panel.previous, tool_previous)
-        # self.Bind(wx.EVT_TOOL, self.panel.next, tool_next)
-        # self.Bind(wx.EVT_TOOL, self.previous_archive, tool_first)
-        # self.Bind(wx.EVT_TOOL, self.next_archive, tool_last)
-        # #
-        # self.Bind(wx.EVT_MOUSEWHEEL , self.dispatch_mouse, self)
-
-        # self.SetSize((600, 600))
-        # self.SetTitle('Comic reader')
-        # self.Centre()
-        # self.Show(True)
-
-        self.current_archive = None
-
-        allocation = self.get_allocation()
-        self.past_width,self.past_height = allocation.width,allocation.height
-
-        self.connect("check-resize",self.check_resize)
 
     def dispatch_mouse(self,event):
         if event.GetWheelRotation() > 0:
