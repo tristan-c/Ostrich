@@ -11,14 +11,9 @@ from PIL.Image import ANTIALIAS
 
 from archive_manager import ArchiveManager
 
-def image2pixbuf(im):
-    """Convert Pillow image to GdkPixbuf"""
-    data = im.tobytes()
-    w, h = im.size
-    data = GLib.Bytes.new(data)
-    pix = GdkPixbuf.Pixbuf.new_from_bytes(data, GdkPixbuf.Colorspace.RGB,
-            False, 8, w, h, w * 3)
-    return pix
+# for i in GdkPixbuf.Pixbuf.get_formats():
+#     print(i.get_extentions())
+
 
 class Panel(Gtk.Image):
     def __init__(self,parent):
@@ -26,7 +21,7 @@ class Panel(Gtk.Image):
 
         self.Parent = parent
 
-        self.pil_image = None
+        self.current_pixbuf = None
 
 
         # self.Bind(wx.EVT_LEFT_UP, self.next)
@@ -76,49 +71,41 @@ class Panel(Gtk.Image):
                 self.repeat_key += 1
 
     def set_image(self,bytes_image):
-        self.pil_image = Image.open(bytes_image)
-        #bitmap = self.scale_bitmap(self.pil_image)
-        pixbuf = image2pixbuf(self.pil_image)
+        
+        loader = GdkPixbuf.PixbufLoader()
+        loader.write(bytes_image.getbuffer())
+        loader.close()
 
-        allocation = self.Parent.get_allocation()
-        desired_width,desired_height = (allocation.width,allocation.height)
-
-        pixbuf = pixbuf.scale_simple(desired_width, desired_height, GdkPixbuf.InterpType.HYPER)
+        self.current_pixbuf = loader.get_pixbuf()
+         
+        pixbuf = self.scale_pixbuf(self.current_pixbuf)
 
         self.set_from_pixbuf(pixbuf)
 
-    def on_size(self,event):
-        if self.pil_image == None:
+    def resize(self,width,height):
+        if self.current_pixbuf == None:
             return
 
-        bitmap = self.scale_bitmap(self.pil_image)
-        bitmap = image2pixbuf(bitmap)
-        self.image.SetBitmap(bitmap)
-        self.Layout()
+        pixbuf = self.scale_pixbuf(self.current_pixbuf)
+        self.set_from_pixbuf(pixbuf)
 
-    def scale_bitmap(self,image):
-        image_width,image_height = image.size
-        allocation = self.get_allocation()
-        max_width,max_height = (500,500)
+
+    def scale_pixbuf(self,pixbuf):
+        allocation = self.Parent.get_allocation()
+        max_width,max_height = (allocation.width,allocation.height)
+        image_width,image_height = (pixbuf.get_width(),pixbuf.get_height())
+
+        #toolbar
+        max_height -= 50
 
         ratio = min(max_width/image_width, max_height/image_height)
 
         new_width = int(image_width * ratio)
         new_height = int(image_height * ratio)
 
-        image = image.resize((new_width, new_height), ANTIALIAS)
+        pixbuf = pixbuf.scale_simple(new_width, new_height, GdkPixbuf.InterpType.HYPER)
 
-        return image
-
-
-UI_INFO = """
-<ui>
-  <toolbar name='ToolBar'>
-    <toolitem action='FileNewStandard' />
-    <toolitem action='FileQuit' />
-  </toolbar>
-</ui>
-"""
+        return pixbuf
 
 class Application_window(Gtk.Window):
     
@@ -146,8 +133,14 @@ class Application_window(Gtk.Window):
         self.InitUI()
 
         self.box.pack_start (self.panel, False, False, 0)
-        
-        
+    
+    def check_resize(self,a):
+        allocation = self.get_allocation()
+        width,height = allocation.width,allocation.height
+        if width != self.past_width or height != self.past_height:
+            self.past_width,self.past_height = width,height
+            self.panel.resize(width,height)
+    
     def InitUI(self):
         toolbar = Gtk.Toolbar()
         self.box.add(toolbar)
@@ -187,17 +180,17 @@ class Application_window(Gtk.Window):
 
         self.current_archive = None
 
+        allocation = self.get_allocation()
+        self.past_width,self.past_height = allocation.width,allocation.height
+
+        self.connect("check-resize",self.check_resize)
+
     def dispatch_mouse(self,event):
         if event.GetWheelRotation() > 0:
             self.panel.next(event)
         else:
             self.panel.previous(event)
         
-    # def OnAbout(self,e):
-    #     # Create a message dialog box
-    #     dlg = wx.MessageDialog(self, " A sample editor \n in wxPython", "About Sample Editor", wx.OK)
-    #     dlg.ShowModal() # Shows it
-    #     dlg.Destroy() # finally destroy it when finished.
     def next_archive(self,e):
         self.change_archive()
 
