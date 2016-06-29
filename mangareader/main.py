@@ -20,29 +20,11 @@ class Panel(Gtk.Image):
         super(Panel, self).__init__()
 
         self.Parent = parent
-
         self.current_pixbuf = None
-
-
-        # self.Bind(wx.EVT_LEFT_UP, self.next)
-        # self.Bind(wx.EVT_RIGHT_UP, self.previous )
-        # self.Bind(wx.EVT_SIZE, self.on_size)
-
-        # self.image.Bind(wx.EVT_LEFT_UP, self.next)
-        # self.image.Bind(wx.EVT_RIGHT_UP, self.previous )
 
         self.repeat_key = 0
         self.last_action_ts = time()
 
-    def load_first_page(self):
-        _file = self.Parent.archive_manager.first_page()
-        if _file:
-            self.set_image(_file)
-
-    def load_last_page(self):
-        _file = self.Parent.archive_manager.last_page()
-        if _file:
-            self.set_image(_file)
 
     def display_page(self,_file,next_file=True):
         if _file:
@@ -152,11 +134,23 @@ class Application_window(Gtk.Window):
 
     def previous(self,event):
         _file = self.archive_manager.previous()
-        self.panel.display_page(_file)
+        if _file:
+            self.panel.display_page(_file)
 
     def next(self,event):
         _file = self.archive_manager.next()
-        self.panel.display_page(_file)
+        if _file:
+            self.panel.display_page(_file)
+
+    def load_first_page(self):
+        _file = self.archive_manager.first_page()
+        if _file:
+            self.panel.display_page(_file)
+
+    def load_last_page(self):
+        _file = self.archive_manager.last_page()
+        if _file:
+            self.panel.display_page(_file)
 
     def check_resize(self,a):
         allocation = self.get_allocation()
@@ -245,9 +239,9 @@ class Application_window(Gtk.Window):
         self.set_title(basename(self.current_archive))
 
         if first_page:
-            self.panel.load_first_page()
+            self.load_first_page()
         else:
-            self.panel.load_last_page()
+            self.load_last_page()
 
 
 if __name__ == '__main__':
