@@ -1,3 +1,10 @@
+"""Summary
+
+Attributes:
+    regex (TYPE): Description
+    regex : TYPE
+    Description
+"""
 import os
 import re
 from zipfile import ZipFile
@@ -7,6 +14,7 @@ from io import BytesIO
 regex = re.compile("\d+")
 
 def tryint(s):
+
     try:
         return int(s)
     except:
@@ -14,24 +22,28 @@ def tryint(s):
 
 # courtesy of http://stackoverflow.com/questions/4623446/how-do-you-sort-files-numerically
 def alphanum_key(s):
-    """ Turn a string into a list of string and number chunks.
-        "z23a" -> ["z", 23, "a"]
-    """
+
     return [ tryint(c) for c in re.split('([0-9]+)', s) ]
 
 class ArchiveManager:
     def __init__(self):
+        """Summary
+        """
         self.archive = None
         self.archive_type = None
         self.listfile = None
         self.listfile_index = 0
+        self.archive_path = None
         self.archive_length = 0
 
         self.hit_next = 0
 
     def open_zip(self,archive_path):
+
         if self.archive:
             self.archive.close()
+
+        self.archive_path = archive_path
 
         filename, file_extension = os.path.splitext(archive_path)
 
@@ -55,15 +67,40 @@ class ArchiveManager:
         self.archive_length = len(self.listfile)
         self.listfile_index = 0
 
+    def delete_current_archive(self):
+
+        if not self.archive or not self.archive_path:
+            return
+        
+        self.archive.close()
+
+        try:
+            os.remove(self.archive_path)
+            return True
+        except Exception as e:
+            print(e)
+            return False
 
     def first_page(self):
+
         return self.get_file(self.listfile[0])
 
     def last_page(self):
+
         self.listfile_index = len(self.listfile) - 1
         return self.get_file(self.listfile[self.listfile_index])
 
     def get_file(self,name):
+        """[summary]
+        
+        [description]
+        
+        Arguments:
+            name {[type]} -- [description]
+        
+        Returns:
+            [type] -- [description]
+        """
         image = BytesIO()
         if self.archive_type == "zip":
             image.write(self.archive.read(name))
@@ -78,6 +115,7 @@ class ArchiveManager:
 
 
     def next(self):
+
         if not self.archive:
             return None
 
@@ -91,6 +129,7 @@ class ArchiveManager:
         return self.get_file(filename)
 
     def previous(self):
+
         if not self.archive:
             return None
 
@@ -102,7 +141,5 @@ class ArchiveManager:
         filename = self.listfile[self.listfile_index]
         return self.get_file(filename)
 
-
-
-
-
+    def get_display_counter(self):
+        return "%i/%i" % (listfile_index,self.archive_length)

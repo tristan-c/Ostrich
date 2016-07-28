@@ -16,7 +16,9 @@ from archive_manager import ArchiveManager
 
 
 class Panel(Gtk.Image):
+
     def __init__(self,parent):
+
         super(Panel, self).__init__()
 
         self.Parent = parent
@@ -27,6 +29,7 @@ class Panel(Gtk.Image):
 
 
     def display_page(self,_file,next_file=True):
+
         if _file:
             self.set_image(_file)
             self.last_action_ts = time()
@@ -43,7 +46,7 @@ class Panel(Gtk.Image):
                 self.repeat_key += 1
 
     def set_image(self,bytes_image):
-        
+
         loader = GdkPixbuf.PixbufLoader()
         loader.write(bytes_image.getbuffer())
         loader.close()
@@ -55,6 +58,7 @@ class Panel(Gtk.Image):
         self.set_from_pixbuf(pixbuf)
 
     def resize(self,width,height):
+
         if self.current_pixbuf == None:
             return
 
@@ -63,6 +67,14 @@ class Panel(Gtk.Image):
 
 
     def scale_pixbuf(self,pixbuf):
+        """Summary
+        
+        Args:
+            pixbuf (TYPE): Description
+        
+        Returns:
+            TYPE: Description
+        """
         allocation = self.Parent.get_allocation()
         max_width,max_height = (allocation.width,allocation.height)
         image_width,image_height = (pixbuf.get_width(),pixbuf.get_height())
@@ -80,7 +92,7 @@ class Panel(Gtk.Image):
         return pixbuf
 
 class Application_window(Gtk.Window):
-    
+
     def __init__(self, title):
 
         self.archive_manager = ArchiveManager()
@@ -120,6 +132,7 @@ class Application_window(Gtk.Window):
         self.connect("key_press_event",self.manage_key_events)
     
     def manage_key_events(self,widget,event):
+
         if not self.current_archive:
             return
 
@@ -133,26 +146,35 @@ class Application_window(Gtk.Window):
             
 
     def previous(self,event):
+
         _file = self.archive_manager.previous()
         if _file:
             self.panel.display_page(_file)
 
+        self.update_title()
+
     def next(self,event):
+
         _file = self.archive_manager.next()
         if _file:
             self.panel.display_page(_file)
 
+        self.update_title()
+
     def load_first_page(self):
+
         _file = self.archive_manager.first_page()
         if _file:
             self.panel.display_page(_file)
 
     def load_last_page(self):
+
         _file = self.archive_manager.last_page()
         if _file:
             self.panel.display_page(_file)
 
     def check_resize(self,a):
+
         allocation = self.get_allocation()
         width,height = allocation.width,allocation.height
         if width != self.past_width or height != self.past_height:
@@ -160,6 +182,7 @@ class Application_window(Gtk.Window):
             self.panel.resize(width,height)
     
     def InitUI(self):
+
         toolbar = Gtk.Toolbar()
         self.box.add(toolbar)
         
@@ -174,27 +197,55 @@ class Application_window(Gtk.Window):
         tool_next.connect_after('clicked',self.next)
         tool_last = Gtk.ToolButton(stock_id=Gtk.STOCK_GOTO_LAST)
         tool_last.connect_after('clicked',self.next_archive)
+        tool_delete = Gtk.ToolButton(stock_id=Gtk.STOCK_DELETE)
+        tool_delete.connect_after('clicked',self.delete_archive)
 
         toolbar.add(tool_open)
         toolbar.add(tool_first)
         toolbar.add(tool_previous)
         toolbar.add(tool_next)
         toolbar.add(tool_last)
+        toolbar.add(tool_delete)
+
+    def delete_archive(self,event):
+
+        dialog = Gtk.MessageDialog(self, 0, Gtk.MessageType.WARNING,
+            Gtk.ButtonsType.OK_CANCEL, "Are you sure ?")
+        dialog.format_secondary_text(
+            "Do you want to delete this file, the file will be DESTROYED")
+
+        response = dialog.run()
+        
+        if response == Gtk.ResponseType.OK:
+            success = self.archive_manager.delete_current_archive()
+            if success:
+                self.next_archive()
+            else:
+                error_box = Gtk.MessageDialog(self, 0, Gtk.MessageType.INFO,
+                    Gtk.ButtonsType.OK, "Error while deleting.")
+                error_box.format_secondary_text(
+                    "Can't delete %s" % basename(self.current_archive))
+                error_box.run()
+
+        dialog.destroy()
 
     def dispatch_mouse(self,event):
+
         if event.GetWheelRotation() > 0:
             self.panel.next(event)
         else:
             self.panel.previous(event)
         
     def next_archive(self,e):
+
         self.change_archive()
 
     def previous_archive(self,e):
+
         self.change_archive(next_archive=False)
 
     def on_open(self,button):
-        """ Open a file"""
+
         dialog = Gtk.FileChooserDialog ("Open archive", button.get_toplevel(), Gtk.FileChooserAction.OPEN);
         dialog.add_button (Gtk.STOCK_CANCEL, 0)
         dialog.add_button (Gtk.STOCK_OK, 1)
@@ -211,6 +262,7 @@ class Application_window(Gtk.Window):
         dialog.destroy()
 
     def change_archive(self, next_archive=True, first_page=True):
+
         if self.current_archive:
             file_list = []
 
@@ -229,8 +281,13 @@ class Application_window(Gtk.Window):
 
             if index < len(files):
                 self.open_archive(files[index],first_page=first_page)
+            else:
+                self.open_archive(files[len(files)-1],first_page=first_page)
+
+        self.update_title()
 
     def open_archive(self,path, first_page=True):
+
         self.current_archive = path
         self.dirname = dirname(path)
 
@@ -243,6 +300,12 @@ class Application_window(Gtk.Window):
         else:
             self.load_last_page()
 
+    def update_title(self):
+        title = "%s - [%s]" % (
+            basename(self.current_archive),
+            self.archive_manager.get_display_counter()
+        )
+        self.set_title(title)
 
 if __name__ == '__main__':
     win = Application_window("comicreader")
