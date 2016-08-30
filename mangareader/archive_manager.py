@@ -142,4 +142,4 @@ class ArchiveManager:
         return self.get_file(filename)
 
     def get_display_counter(self):
-        return "%i/%i" % (listfile_index,self.archive_length)
+        return "%i/%i" % (self.listfile_index + 1 ,self.archive_length)
