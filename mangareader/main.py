@@ -24,26 +24,10 @@ class Panel(Gtk.Image):
         self.Parent = parent
         self.current_pixbuf = None
 
-        self.repeat_key = 0
-        self.last_action_ts = time()
 
-
-    def display_page(self,_file,next_file=True):
-
-        if _file:
-            self.set_image(_file)
-            self.last_action_ts = time()
-        else:
-            if self.repeat_key >= 2:
-                delay = time() - self.last_action_ts 
-                if delay >= 1: 
-                    if not next_file:
-                        self.Parent.change_archive(next_file,first_page=False)
-                    else:
-                        self.Parent.change_archive(next_file)
-                self.repeat_key = 0
-            else:
-                self.repeat_key += 1
+    def display_page(self,image_file,nextimage_file=True):
+        if image_file:
+            self.set_image(image_file)
 
     def set_image(self,bytes_image):
 
@@ -67,14 +51,6 @@ class Panel(Gtk.Image):
 
 
     def scale_pixbuf(self,pixbuf):
-        """Summary
-        
-        Args:
-            pixbuf (TYPE): Description
-        
-        Returns:
-            TYPE: Description
-        """
         allocation = self.Parent.get_allocation()
         max_width,max_height = (allocation.width,allocation.height)
         image_width,image_height = (pixbuf.get_width(),pixbuf.get_height())
@@ -118,60 +94,72 @@ class Application_window(Gtk.Window):
 
         self.overlay.add_overlay(self.box)
 
+        self.panel_event_box = Gtk.EventBox()
+        self.panel_event_box.set_above_child(True)
         self.panel = Panel(parent=self)
+        self.panel_event_box.add(self.panel)
+
         self.InitUI()
 
-        self.box.pack_start (self.panel, False, False, 0)
+        self.box.pack_start (self.panel_event_box, False, False, 0)
 
         self.current_archive = None
 
         allocation = self.get_allocation()
+
         self.past_width,self.past_height = allocation.width,allocation.height
 
         self.connect("check-resize",self.check_resize)
         self.connect("key_press_event",self.manage_key_events)
-    
+        #self.panel_event_box.connect("scroll-event", self.manage_button_events)
+        self.panel_event_box.connect("button-press-event", self.manage_button_events)
+
+    def manage_button_events(self,widget,event):
+        next_key_list = [Gdk.BUTTON_SECONDARY,Gdk.KEY_ScrollUp]
+        previous_key_list = [Gdk.BUTTON_PRIMARY,Gdk.KEY_ScrollDown]
+
+        if event.button in next_key_list:
+            self.previous()
+        elif event.button in previous_key_list:
+            self.next()
+
     def manage_key_events(self,widget,event):
-
-        if not self.current_archive:
-            return
-
-        if event.keyval not in [Gdk.KEY_Left,Gdk.KEY_Right]:
-            return
-
         if(event.keyval == Gdk.KEY_Left):
             self.previous()
         elif (event.keyval == Gdk.KEY_Right):
             self.next()
             
+    def previous(self,**kwargs):
+        if not self.current_archive:
+            return
 
-    def previous(self,event):
-
-        _file = self.archive_manager.previous()
-        if _file:
-            self.panel.display_page(_file)
+        image_file = self.archive_manager.previous()
+        if image_file:
+            self.panel.display_page(image_file)
 
         self.update_title()
 
-    def next(self,event):
+    def next(self,**kwargs):
+        if not self.current_archive:
+            return
 
-        _file = self.archive_manager.next()
-        if _file:
-            self.panel.display_page(_file)
+        image_file = self.archive_manager.next()
+        if image_file:
+            self.panel.display_page(image_file)
 
         self.update_title()
 
     def load_first_page(self):
 
-        _file = self.archive_manager.first_page()
-        if _file:
-            self.panel.display_page(_file)
+        image_file = self.archive_manager.first_page()
+        if image_file:
+            self.panel.display_page(image_file)
 
     def load_last_page(self):
 
-        _file = self.archive_manager.last_page()
-        if _file:
-            self.panel.display_page(_file)
+        image_file = self.archive_manager.last_page()
+        if image_file:
+            self.panel.display_page(image_file)
 
     def check_resize(self,a):
 
@@ -208,11 +196,12 @@ class Application_window(Gtk.Window):
         toolbar.add(tool_delete)
 
     def delete_archive(self,event):
-
         dialog = Gtk.MessageDialog(self, 0, Gtk.MessageType.WARNING,
             Gtk.ButtonsType.OK_CANCEL, "Are you sure ?")
-        dialog.format_secondary_text(
-            "Do you want to delete this file, the file will be DESTROYED")
+
+        archive_name = self.archive_manager.get_current_archive_name()
+        secondary_text = "The file \"%s\" will be DESTROYED" % archive_name
+        dialog.format_secondary_text(secondary_text)
 
         response = dialog.run()
         
@@ -224,28 +213,24 @@ class Application_window(Gtk.Window):
                 error_box = Gtk.MessageDialog(self, 0, Gtk.MessageType.INFO,
                     Gtk.ButtonsType.OK, "Error while deleting.")
                 error_box.format_secondary_text(
-                    "Can't delete %s" % basename(self.current_archive))
+                    "Can't delete %s" % archive_name)
                 error_box.run()
 
         dialog.destroy()
 
     def dispatch_mouse(self,event):
-
         if event.GetWheelRotation() > 0:
             self.panel.next(event)
         else:
             self.panel.previous(event)
         
-    def next_archive(self,e):
-
+    def next_archive(self,e=None):
         self.change_archive()
 
     def previous_archive(self,e):
-
         self.change_archive(next_archive=False)
 
     def on_open(self,button):
-
         dialog = Gtk.FileChooserDialog ("Open archive", button.get_toplevel(), Gtk.FileChooserAction.OPEN);
         dialog.add_button (Gtk.STOCK_CANCEL, 0)
         dialog.add_button (Gtk.STOCK_OK, 1)
@@ -299,6 +284,8 @@ class Application_window(Gtk.Window):
             self.load_first_page()
         else:
             self.load_last_page()
+
+        self.update_title()
 
     def update_title(self):
         title = "%s - [%s]" % (

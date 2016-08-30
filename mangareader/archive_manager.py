@@ -1,10 +1,3 @@
-"""Summary
-
-Attributes:
-    regex (TYPE): Description
-    regex : TYPE
-    Description
-"""
 import os
 import re
 from zipfile import ZipFile
@@ -14,7 +7,6 @@ from io import BytesIO
 regex = re.compile("\d+")
 
 def tryint(s):
-
     try:
         return int(s)
     except:
@@ -22,7 +14,6 @@ def tryint(s):
 
 # courtesy of http://stackoverflow.com/questions/4623446/how-do-you-sort-files-numerically
 def alphanum_key(s):
-
     return [ tryint(c) for c in re.split('([0-9]+)', s) ]
 
 class ArchiveManager:
@@ -140,6 +131,9 @@ class ArchiveManager:
 
         filename = self.listfile[self.listfile_index]
         return self.get_file(filename)
+
+    def get_current_archive_name(self):
+        return os.path.basename(self.archive_path)
 
     def get_display_counter(self):
         return "%i/%i" % (self.listfile_index + 1 ,self.archive_length)
