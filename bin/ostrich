@@ -1,0 +1,5 @@
+#!/usr/bin/env python
+from ostrich.main import start_app
+
+if __name__ == '__main__':
+	start_app()

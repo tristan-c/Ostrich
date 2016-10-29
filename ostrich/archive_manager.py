@@ -82,16 +82,6 @@ class ArchiveManager:
         return self.get_file(self.listfile[self.listfile_index])
 
     def get_file(self,name):
-        """[summary]
-        
-        [description]
-        
-        Arguments:
-            name {[type]} -- [description]
-        
-        Returns:
-            [type] -- [description]
-        """
         image = BytesIO()
         if self.archive_type == "zip":
             image.write(self.archive.read(name))
@@ -104,9 +94,7 @@ class ArchiveManager:
 
         return image
 
-
     def next(self):
-
         if not self.archive:
             return None
 
@@ -120,7 +108,6 @@ class ArchiveManager:
         return self.get_file(filename)
 
     def previous(self):
-
         if not self.archive:
             return None
 

@@ -1,15 +1,21 @@
+import sys
 from os import listdir
-from os.path import expanduser, dirname, isfile, join, basename
+from os.path import expanduser, dirname, isfile, join, basename, abspath
 from time import time
 
-import gi, glib
+from urllib.parse import urlparse,unquote
+
+try:
+    import gi, glib
+except Exception as e:
+    print("Error: You should install PyGI, apt-get install python3-gi on debian/ubuntu, yum install python3-gobject for fedora")
+    sys.exit(0)
+
 gi.require_version('Gtk', '3.0')
+
 from gi.repository import Gtk, GdkPixbuf, GLib, Gdk
 
-from PIL import Image
-from PIL.Image import ANTIALIAS
-
-from archive_manager import ArchiveManager
+from ostrich.archive_manager import ArchiveManager
 
 # for i in GdkPixbuf.Pixbuf.get_formats():
 #     print(i.get_extentions())
@@ -42,7 +48,6 @@ class Panel(Gtk.Image):
         self.set_from_pixbuf(pixbuf)
 
     def resize(self,width,height):
-
         if self.current_pixbuf == None:
             return
 
@@ -71,14 +76,19 @@ class Application_window(Gtk.Window):
 
     def __init__(self, title):
 
-        self.archive_manager = ArchiveManager()
-        self.wildcard = "Zip archive (*.zip)|*.zip|"\
-                        "Tar acrhive (*.tar)|*.tar"
-
         Gtk.Window.__init__(self, title=title)
 
+        self.archive_manager = ArchiveManager()
+        self.wildcard = "Zip archive (*.zip)|*.zip|"\
+                        "Tar archive (*.tar)|*.tar"\
+                        "Cbz archive (*.cbz)|*.cbz"\
+                        "Cbt archive (*.cbz)|*.cbt"
+
+
         self.dirname=expanduser("~")
-        # self.SetBackgroundColour('BLACK')
+        self.window_is_fullscreen = False
+
+        self.set_default_size(500,700)
 
         self.box = Gtk.Box()
         self.box.override_background_color(
@@ -114,6 +124,39 @@ class Application_window(Gtk.Window):
         #self.panel_event_box.connect("scroll-event", self.manage_button_events)
         self.panel_event_box.connect("button-press-event", self.manage_button_events)
 
+        self.connect("window-state-event",self.on_window_state_change )
+
+
+        #Drag and drop event
+        self.connect('drag_data_received', self.on_drag_data_received)
+        self.connect('drag_drop', self.drop_cb)
+        self.connect('drag-motion', self.motion_cb)
+
+        self.drag_dest_set(0,[],Gdk.DragAction.COPY)
+
+    def motion_cb(self, widget, context, x, y, time):
+        Gdk.drag_status(context, Gdk.DragAction.COPY, time)
+        return True
+
+    def drop_cb(self, widget, context, x, y, time):
+        widget.drag_get_data(context, context.list_targets()[-1], time)
+
+    def on_drag_data_received(self, widget, drag_context, x, y, data, info, time):
+        #clean uri path
+        files = data.get_text().rstrip('\n').split('\n')
+        file = files[0]
+
+        #from URI to Path
+        url = urlparse(file)
+        final_path = abspath(join(url.netloc, url.path))
+        final_path = unquote(final_path)
+
+        self.open_archive(final_path)
+
+    def on_window_state_change(self, widget, event):
+        self.window_is_fullscreen = bool(
+            Gdk.WindowState.FULLSCREEN & event.new_window_state)
+
     def manage_button_events(self,widget,event):
         next_key_list = [Gdk.BUTTON_SECONDARY,Gdk.KEY_ScrollUp]
         previous_key_list = [Gdk.BUTTON_PRIMARY,Gdk.KEY_ScrollDown]
@@ -128,8 +171,13 @@ class Application_window(Gtk.Window):
             self.previous()
         elif (event.keyval == Gdk.KEY_Right):
             self.next()
+        if event.keyval == Gdk.KEY_F11:
+            if self.window_is_fullscreen:
+                self.unfullscreen()
+            else:
+                self.fullscreen()
             
-    def previous(self,**kwargs):
+    def previous(self,button=None):
         if not self.current_archive:
             return
 
@@ -139,7 +187,7 @@ class Application_window(Gtk.Window):
 
         self.update_title()
 
-    def next(self,**kwargs):
+    def next(self,button=None):
         if not self.current_archive:
             return
 
@@ -150,12 +198,16 @@ class Application_window(Gtk.Window):
         self.update_title()
 
     def load_first_page(self):
+        if not self.current_archive:
+            return
 
         image_file = self.archive_manager.first_page()
         if image_file:
             self.panel.display_page(image_file)
 
     def load_last_page(self):
+        if not self.current_archive:
+            return
 
         image_file = self.archive_manager.last_page()
         if image_file:
@@ -196,6 +248,9 @@ class Application_window(Gtk.Window):
         toolbar.add(tool_delete)
 
     def delete_archive(self,event):
+        if not self.current_archive:
+            return
+
         dialog = Gtk.MessageDialog(self, 0, Gtk.MessageType.WARNING,
             Gtk.ButtonsType.OK_CANCEL, "Are you sure ?")
 
@@ -208,7 +263,12 @@ class Application_window(Gtk.Window):
         if response == Gtk.ResponseType.OK:
             success = self.archive_manager.delete_current_archive()
             if success:
-                self.next_archive()
+                if self.is_there_next_archive():
+                    self.next_archive()
+                else:
+                    self.previous_archive()
+                #we reload only after, otherwise you will not find your archive
+                self.reload_file_list()
             else:
                 error_box = Gtk.MessageDialog(self, 0, Gtk.MessageType.INFO,
                     Gtk.ButtonsType.OK, "Error while deleting.")
@@ -218,16 +278,22 @@ class Application_window(Gtk.Window):
 
         dialog.destroy()
 
-    def dispatch_mouse(self,event):
-        if event.GetWheelRotation() > 0:
-            self.panel.next(event)
+    def is_there_next_archive(self):
+        index_current_archive = self.file_list.index(self.current_archive)
+        last_archive_index = len(self.file_list) - 1
+        if index_current_archive == last_archive_index:
+            return False
         else:
-            self.panel.previous(event)
+            return True
         
     def next_archive(self,e=None):
+        if not self.current_archive:
+            return
         self.change_archive()
 
     def previous_archive(self,e):
+        if not self.current_archive:
+            return
         self.change_archive(next_archive=False)
 
     def on_open(self,button):
@@ -246,28 +312,27 @@ class Application_window(Gtk.Window):
 
         dialog.destroy()
 
+    #reload all files present in directory
+    def reload_file_list(self):
+        file_list = []
+
+        for f in listdir(self.dirname):
+            filename = join(self.dirname, f)
+            if isfile(filename):
+                file_list.append(filename)
+
+        self.file_list = sorted(file_list)
+
     def change_archive(self, next_archive=True, first_page=True):
 
-        if self.current_archive:
-            file_list = []
+        index = self.file_list.index(self.current_archive)
+        index = index + 1 if next_archive else index -1
 
-            for f in listdir(self.dirname):
-                filename = join(self.dirname, f)
-                if isfile(filename):
-                    file_list.append(filename)
+        # do nothing
+        if index < 0 or index >= len(self.file_list):
+            return 
 
-            files = sorted(file_list)
-            index = files.index(self.current_archive)
-            index = index + 1 if next_archive else index -1
-
-            # if -1 we're a the start of directory, prevent looping to the end
-            if index < 0:
-                return 
-
-            if index < len(files):
-                self.open_archive(files[index],first_page=first_page)
-            else:
-                self.open_archive(files[len(files)-1],first_page=first_page)
+        self.open_archive(self.file_list[index],first_page=first_page)
 
         self.update_title()
 
@@ -275,6 +340,8 @@ class Application_window(Gtk.Window):
 
         self.current_archive = path
         self.dirname = dirname(path)
+
+        self.reload_file_list()
 
         self.archive_manager.open_zip(path)
 
@@ -294,7 +361,7 @@ class Application_window(Gtk.Window):
         )
         self.set_title(title)
 
-if __name__ == '__main__':
+def start_app(archive_path=None):
     win = Application_window("comicreader")
     win.connect("delete-event", Gtk.main_quit)
     win.show_all()
